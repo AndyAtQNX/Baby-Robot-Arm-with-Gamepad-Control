@@ -222,8 +222,8 @@ class ArmControllerNode(Node):
             self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]
             self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]
             self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]
-            self.target_positions[3] += axes[4] * self.SERVO_SPEEDS[3]
-            self.target_positions[4] += axes[2] * -1 * self.SERVO_SPEEDS[4]
+            self.target_positions[3] += axes[2] * -1 * self.SERVO_SPEEDS[3]
+            self.target_positions[4] += axes[4] * self.SERVO_SPEEDS[4]
             
             if msg.buttons[4] == 1: self.target_positions[5] = self.GRIPPER_CLOSED_PERCENT
             elif msg.buttons[5] == 1: self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
