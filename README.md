@@ -62,7 +62,7 @@ The servos require more power than the Raspberry Pi can safely provide. You must
 * Connect the **`+` (positive)** wire from your 6V power supply to the **`V+`** terminal on the green screw-down block of the PCA9685.
 * Connect the **`-` (negative/ground)** wire from your power supply to the **`GND`** terminal on the green block.
  
-> **⚠ Warning:** Do **not** attempt to power the servos directly from the Raspberry Pi's 5V GPIO pin. Doing so can draw too much current and permanently damage your Raspberry Pi.
+> ** Warning:** Do **not** attempt to power the servos directly from the Raspberry Pi's 5V GPIO pin. Doing so can draw too much current and permanently damage your Raspberry Pi.
  
 ### 3. Servo Control Wiring (Servos to PCA9685)
 Plug the six servos from the robot arm into the PWM output channels on the PCA9685 board. The demo is configured to use the following channel mapping:
