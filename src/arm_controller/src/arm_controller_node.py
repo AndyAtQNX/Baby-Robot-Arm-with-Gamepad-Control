@@ -80,6 +80,8 @@ class ArmControllerNode(Node):
         # Sets safe open/close limits for the gripper to prevent stalling.
         self.GRIPPER_CLOSED_PERCENT = 15
         self.GRIPPER_OPEN_PERCENT = 65
+        # Configurable prarmeter for the number of servos connected
+        self.NUM_SERVOS = 6 
 
         ## --------------------------------------------------------------------------
         ## Screensaver State & Parameters
@@ -88,7 +90,7 @@ class ArmControllerNode(Node):
         SHOULDER_FORWARD_REACH = 40.0 # Range: 50 (straight up) to ~30 (far forward)
         WRIST_CORRECTION = -5.0       # wrist angle
  
-        # The formula applies to Servo 4 (Wrist Pitch)
+        # This formula applies to Servo 4 (Wrist Pitch)
         self.DRAWING_POSE = [
             50.0,                               # Servo 0: Base
             SHOULDER_FORWARD_REACH,             # Servo 1: Shoulder
@@ -106,9 +108,9 @@ class ArmControllerNode(Node):
         ## --------------------------------------------------------------------------
         
         # Stores the desired destination for each servo (0-100%).
-        self.target_positions = [50.0] * 6
+        self.target_positions = [50.0] * self.NUM_SERVOS
         # Stores the servo's actual, interpolated position (0-100%).
-        self.current_positions = [50.0] * 6
+        self.current_positions = [50.0] * self.NUM_SERVOS
         # To track the home button state.
         self.home_button_was_pressed = False
         # Screen Saver Mode
@@ -127,7 +129,7 @@ class ArmControllerNode(Node):
             self.get_logger().info("PCA9685 Initialized at 50Hz.")
         except Exception as e:
             self.get_logger().error(f"Failed to initialize PCA9685: {e}")
-            self.get_logger().error("Is the I2C bus enabled and the device connected?")
+            self.get_logger().error("Is the I2C bus enabled and the device connected? Run the program as root.")
             rclpy.shutdown()
             return
  
@@ -159,7 +161,7 @@ class ArmControllerNode(Node):
             if self.screensaver_active:
                 self.screensaver_active = False
                 self.get_logger().info("Screensaver cancelled by home button.")
-            self.target_positions = [50.0] * 6
+            self.target_positions = [50.0] * self.NUM_SERVOS
         self.home_button_was_pressed = (msg.buttons[3] == 1)
  
         # 3. Check for other joystick/button input that should CANCEL the screensaver.
@@ -242,7 +244,7 @@ class ArmControllerNode(Node):
         @param servo The servo channel number (0-5).
         @param percentage The desired position as a percentage.
         """
-        if not 0 <= servo <= 5: return
+        if not 0 <= servo <= self.NUM_SERVOS: return
         percentage = max(0, min(100, percentage))
  
         # These min/max pulse values are tuned for each specific servo's range of motion.
@@ -262,9 +264,9 @@ class ArmControllerNode(Node):
         """
         @brief Instantly centers all servos and resets their state variables.
         """
-        self.target_positions = [50.0] * 6
-        self.current_positions = [50.0] * 6
-        for i in range(6):
+        self.target_positions = [50.0] * self.NUM_SERVOS
+        self.current_positions = [50.0] * self.NUM_SERVOS
+        for i in range(self.NUM_SERVOS):
             self.setPercent(i, 50)
             
     def release_all_servos(self):
@@ -272,7 +274,7 @@ class ArmControllerNode(Node):
         @brief Turns off PWM signals to all servos, allowing them to go limp.
         """
         self.get_logger().info("Releasing all servos (turning off PWM).")
-        for i in range(6):
+        for i in range(self.NUM_SERVOS):
             self.pwm.set_pwm(i, 0, 0)
  
 def main(args=None):
@@ -289,7 +291,7 @@ def main(args=None):
         # shut down the node.
         arm_controller_node.get_logger().info("Shutting down...")
         # Center the arm before exiting.
-        for i in range(6):
+        for i in range(arm_controller_node.NUM_SERVOS):
             arm_controller_node.setPercent(i, 50)
         arm_controller_node.get_logger().info("Arm centered.")
         time.sleep(1)

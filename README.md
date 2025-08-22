@@ -18,6 +18,7 @@ This repository provides a complete ROS2 project for controlling a 6-DOF robotic
 - [How to Run the Demo](#how-to-run-the-demo)
 - [Configuration and Tuning](#configuration-and-tuning)
 - [References](#references)
+- [Acknowledgments](#acknowledgments)
  
 ***
  
@@ -158,3 +159,11 @@ After making changes to the Python script, simply use the `transfer.sh` script a
 - <https://github.com/qnx-ports/build-files>
 2.  **ROS2 Humble Port for QNX**: This is the specific location for the ROS2 Humble port, which contains the necessary patches and build changes to get ROS2 running on the QNX OS.
 - <https://github.com/qnx-ports/build-files/tree/main/ports/ros2>
+
+***
+ 
+## Acknowledgments
+ 
+* The 3D model for the robotic arm was created by **How To Mechatronics**.
+* **Project Page with 3D Models:** [Arduino based Robot Arm](https://cults3d.com/en/3d-model/various/arduino-based-robot-arm-howtomechatronics)
+* **Other Projects & 3D Models:** [How To Mechatronics Homepage](https://cults3d.com/en/users/HowToMechatronics/3d-models)

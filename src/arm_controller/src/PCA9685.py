@@ -72,7 +72,7 @@ class PCA9685(object):
 
         self.set_all_pwm(0, 0)
         
-        bus.write_byte_data(self.address, MODE2, OUTDRV)
+        bus.write_byte_data(self.address, MODE2, OUTDRV | 0x20)
         bus.write_byte_data(self.address, MODE1, ALLCALL)
         time.sleep(0.005) # wait for oscillator
         mode1 = bus.read_byte_data(self.address, MODE1)
