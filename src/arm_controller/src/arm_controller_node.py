@@ -1,0 +1,304 @@
+#!/system/bin/env python3
+"""
+Copyright (c) 2025, BlackBerry Limited. All rights reserved.
+ 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+ 
+    http://www.apache.org/licenses/LICENSE-2.0
+ 
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ 
+@file arm_controller_node.py
+@brief ROS2 node for controlling a 6-DOF robotic arm with a joystick.
+ 
+This node subscribes to `/joy` messages from a joystick teleop node,
+interprets the joystick input as velocity commands for the arm's servos,
+and sends the appropriate PWM signals via a PCA9685 servo driver.
+ 
+Key Features:
+- Incremental Control: Joystick axes control the speed of the servos, not
+  their absolute position, allowing the arm to hold its position on release.
+- Smoothing Factor: Implements an interpolation (easing) function to ensure
+  all arm movements are smooth/controlled.
+- Individual Servo Speed Tuning: Allows each of the 6 servos to have a unique
+  speed setting.
+- Home Position: A dedicated joystick button returns the arm to a neutral,
+  centered position.
+- Deadzone and MIN/MAX: Includes configurable deadzone and gripper open/close
+  percentages to prevent servo drift and stalling.
+"""
+ 
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Joy
+from PCA9685 import PCA9685
+import time
+import math
+ 
+ 
+class ArmControllerNode(Node):
+    """
+    Manages the state and control logic for the robotic arm.
+    """
+    def __init__(self):
+        """
+        @brief Initializes the ArmControllerNode.
+        
+        This sets up tunable parameters, servo state variables, the PCA9685
+        driver, and the ROS2 subscription to the /joy topic.
+        """
+        super().__init__('arm_controller_node')
+        self.get_logger().info("Arm Controller Node has been updated and started.")
+ 
+        ## --------------------------------------------------------------------------
+        ## Tunable Parameters
+        ## --------------------------------------------------------------------------
+        
+        # Controls how smoothly the arm moves to its target position.
+        # Lower values are smoother and slower. Recommended range: 0.05 to 0.2.
+        self.SMOOTHING_FACTOR = 0.1
+ 
+        # Defines the speed multiplier for each servo individually.
+        # Array indices correspond to the servo number (0 to 5).
+        self.SERVO_SPEEDS = [
+            0.5,  # Servo 0: Base
+            0.4,  # Servo 1: Shoulder
+            0.4,  # Servo 2: Elbow
+            0.7,  # Servo 3: Wrist Pitch
+            1.5,  # Servo 4: Wrist Roll
+            1.5   # Servo 5: Gripper
+        ]
+ 
+        # Ignores small joystick movements to prevent servo drift.
+        self.DEADZONE = 0.08
+        # Sets safe open/close limits for the gripper to prevent stalling.
+        self.GRIPPER_CLOSED_PERCENT = 15
+        self.GRIPPER_OPEN_PERCENT = 65
+        # Configurable prarmeter for the number of servos connected
+        self.NUM_SERVOS = 6 
+
+        ## --------------------------------------------------------------------------
+        ## Screensaver State & Parameters
+        ## --------------------------------------------------------------------------
+        ELBOW_DOWNWARD_BEND = 85.0    # Range: 50 (high) to 100 (low)
+        SHOULDER_FORWARD_REACH = 40.0 # Range: 50 (straight up) to ~30 (far forward)
+        WRIST_CORRECTION = -5.0       # wrist angle
+ 
+        # This formula applies to Servo 4 (Wrist Pitch)
+        self.DRAWING_POSE = [
+            50.0,                               # Servo 0: Base
+            SHOULDER_FORWARD_REACH,             # Servo 1: Shoulder
+            ELBOW_DOWNWARD_BEND,                # Servo 2: Elbow
+            50.0,                               # Servo 3: Wrist Roll (Keep centered)
+            (100 - ELBOW_DOWNWARD_BEND) + WRIST_CORRECTION, # Servo 4: Wrist Pitch (Auto-calculated)
+            50.0                                # Servo 5: Gripper
+        ]
+        
+        self.SCREENSAVER_SPEED = 0.05
+        self.SCREENSAVER_WIDTH = 25.0
+        self.SCREENSAVER_HEIGHT = 10.0
+        ## --------------------------------------------------------------------------
+        ## Servo State Storage
+        ## --------------------------------------------------------------------------
+        
+        # Stores the desired destination for each servo (0-100%).
+        self.target_positions = [50.0] * self.NUM_SERVOS
+        # Stores the servo's actual, interpolated position (0-100%).
+        self.current_positions = [50.0] * self.NUM_SERVOS
+        # To track the home button state.
+        self.home_button_was_pressed = False
+        # Screen Saver Mode
+        self.screensaver_active = False
+        self.screensaver_time = 0.0
+        self.screensaver_button_was_pressed = False
+        self.SCREENSAVER_PAUSE_SEC = 1.0  # The pause duration in seconds
+ 
+        ## --------------------------------------------------------------------------
+        ## Hardware and ROS Initialization
+        ## --------------------------------------------------------------------------
+        try:
+            # Initialize the PCA9685 servo driver.
+            self.pwm = PCA9685()
+            self.pwm.set_pwm_freq(50) # Set frequency for standard servos.
+            self.get_logger().info("PCA9685 Initialized at 50Hz.")
+        except Exception as e:
+            self.get_logger().error(f"Failed to initialize PCA9685: {e}")
+            self.get_logger().error("Is the I2C bus enabled and the device connected? Run the program as root.")
+            rclpy.shutdown()
+            return
+ 
+        # Create a subscriber to the /joy topic.
+        self.subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
+        
+        self.get_logger().info("Centering arm on startup...")
+        self.center_all_servos()
+        self.get_logger().info("Arm centered. Waiting for /joy messages...")
+ 
+    def joy_callback(self, msg: Joy):
+        """
+        @brief Callback function that processes incoming joystick messages.
+        
+        This method is called every time a new message is published to /joy.
+        It updates the target positions based on joystick input and then runs
+        the smoothing logic to move the arm.
+        
+        @param msg The incoming sensor_msgs/msg/Joy message.
+        """
+        axes = [0.0] * len(msg.axes)
+        for i, value in enumerate(msg.axes):
+            if abs(value) > self.DEADZONE:
+                axes[i] = value
+ 
+        # 2. Home button ('Y') is a master override that always works and cancels screensaver.
+        if msg.buttons[3] == 1 and not self.home_button_was_pressed:
+            self.get_logger().info("Home button pressed. Setting target to center.")
+            if self.screensaver_active:
+                self.screensaver_active = False
+                self.get_logger().info("Screensaver cancelled by home button.")
+            self.target_positions = [50.0] * self.NUM_SERVOS
+        self.home_button_was_pressed = (msg.buttons[3] == 1)
+ 
+        # 3. Check for other joystick/button input that should CANCEL the screensaver.
+        is_joystick_moved = any(axes)
+        is_action_button_pressed = any(msg.buttons[i] == 1 for i in [4, 5])
+ 
+        if self.screensaver_active and (is_joystick_moved or is_action_button_pressed):
+            self.screensaver_active = False
+            self.get_logger().info("Screensaver deactivated by user input.")
+ 
+        # 4. Toggle screensaver state with the 'X' button (index 2).
+        if msg.buttons[2] == 1 and not self.screensaver_button_was_pressed:
+            self.screensaver_active = not self.screensaver_active
+            if self.screensaver_active:
+                self.get_logger().info("Drawing screensaver activated.")
+                self.screensaver_time = 0.0
+                self.screensaver_is_paused = False # Ensure we start in the drawing state
+            else:
+                self.get_logger().info("Screensaver deactivated.")
+        self.screensaver_button_was_pressed = (msg.buttons[2] == 1)
+ 
+        # 5. Execute the control logic based on the mode.
+        if self.screensaver_active:
+            # --- Screensaver Motion Logic with Pause ---
+            
+            # First, check if we are currently in a paused state.
+            if self.screensaver_is_paused:
+                # Check if the pause duration has passed.
+                if (time.time() - self.pause_start_time) >= self.SCREENSAVER_PAUSE_SEC:
+                    # If so, end the pause and reset the animation.
+                    self.screensaver_is_paused = False
+                    self.screensaver_time = 0.0
+                # If still paused, the arm will hold its position.
+            
+            # If we are not paused, run the drawing logic.
+            else:
+                self.screensaver_time += self.SCREENSAVER_SPEED
+                
+                # Check if one full figure-eight has been drawn (a full cycle is 2*pi).
+                if self.screensaver_time >= (2 * math.pi):
+                    # If so, start the pause.
+                    self.screensaver_is_paused = True
+                    self.pause_start_time = time.time()
+                
+                else:
+                    # Continue drawing the figure-eight
+                    base_pose = self.DRAWING_POSE
+                    offset_x = self.SCREENSAVER_WIDTH * math.cos(self.screensaver_time)
+                    offset_z = self.SCREENSAVER_HEIGHT * math.sin(2 * self.screensaver_time)
+                    
+                    self.target_positions[0] = base_pose[0] + offset_x
+                    self.target_positions[2] = base_pose[2] + offset_z
+                    self.target_positions[4] = base_pose[4] - offset_z
+                    self.target_positions[1] = base_pose[1]
+                    self.target_positions[3] = base_pose[3]
+                    self.target_positions[5] = self.GRIPPER_CLOSED_PERCENT
+            
+        else:
+            # --- Normal Joystick Control Logic ---
+            self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]
+            self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]
+            self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]
+            self.target_positions[3] += axes[2] * -1 * self.SERVO_SPEEDS[3]
+            self.target_positions[4] += axes[4] * self.SERVO_SPEEDS[4]
+            
+            if msg.buttons[4] == 1: self.target_positions[5] = self.GRIPPER_CLOSED_PERCENT
+            elif msg.buttons[5] == 1: self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
+ 
+        # 6. Apply smoothing and send final commands to servos.
+        for i in range(len(self.target_positions)):
+            self.target_positions[i] = max(0.0, min(100.0, self.target_positions[i]))
+            error = self.target_positions[i] - self.current_positions[i]
+            self.current_positions[i] += error * self.SMOOTHING_FACTOR
+            self.setPercent(i, self.current_positions[i])
+ 
+    def setPercent(self, servo, percentage):
+        """
+        @brief Converts a percentage (0-100) to a PWM value and sends it to a servo.
+        
+        @param servo The servo channel number (0-5).
+        @param percentage The desired position as a percentage.
+        """
+        if not 0 <= servo <= self.NUM_SERVOS: return
+        percentage = max(0, min(100, percentage))
+ 
+        # These min/max pulse values are tuned for each specific servo's range of motion.
+        if (servo == 0): max_pulse, min_pulse = 1060, 570
+        elif (servo == 1): max_pulse, min_pulse = 1060, 750
+        elif (servo == 2): max_pulse, min_pulse = 1020, 606
+        elif (servo == 3): max_pulse, min_pulse = 1010, 570
+        elif (servo == 4): max_pulse, min_pulse = 1020, 606
+        elif (servo == 5): max_pulse, min_pulse = 930, 620
+        else: return
+        
+        # Map the percentage to the servo's pulse width range.
+        pwm_val = int(min_pulse + (percentage / 100.0) * (max_pulse - min_pulse))
+        self.pwm.set_pwm(servo, 500, pwm_val)
+ 
+    def center_all_servos(self):
+        """
+        @brief Instantly centers all servos and resets their state variables.
+        """
+        self.target_positions = [50.0] * self.NUM_SERVOS
+        self.current_positions = [50.0] * self.NUM_SERVOS
+        for i in range(self.NUM_SERVOS):
+            self.setPercent(i, 50)
+            
+    def release_all_servos(self):
+        """
+        @brief Turns off PWM signals to all servos, allowing them to go limp.
+        """
+        self.get_logger().info("Releasing all servos (turning off PWM).")
+        for i in range(self.NUM_SERVOS):
+            self.pwm.set_pwm(i, 0, 0)
+ 
+def main(args=None):
+    """
+    @brief Main entry point for the ROS2 node.
+    """
+    rclpy.init(args=args)
+    arm_controller_node = ArmControllerNode()
+    try:
+        rclpy.spin(arm_controller_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # shut down the node.
+        arm_controller_node.get_logger().info("Shutting down...")
+        # Center the arm before exiting.
+        for i in range(arm_controller_node.NUM_SERVOS):
+            arm_controller_node.setPercent(i, 50)
+        arm_controller_node.get_logger().info("Arm centered.")
+        time.sleep(1)
+        arm_controller_node.release_all_servos()
+        arm_controller_node.destroy_node()
+        rclpy.shutdown()
+ 
+if __name__ == '__main__':
+    main()
+ 

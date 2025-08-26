@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>arm_controller</name>
+  <version>1.0.0</version>
+  <description>Subscribes to /joy messages and controls a 6DOF arm via a PCA9685 driver.</description>
+  <maintainer email="nirajpatel@qnx.com">user</maintainer>
+  <license>Apache License 2.0</license>
+ 
+  <build_depend>ament_cmake</build_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+ 
