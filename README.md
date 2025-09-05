@@ -86,6 +86,8 @@ Ensure the servo plugs are oriented correctly. The signal wire (yellow) should b
   * **Official Port:** [QNX ROS2 Build Files](https://github.com/qnx-ports/build-files/tree/main/ports/ros2)
  
 * **Dependencies:** The cross-compiled ROS2 installation must include `rclpy` and `rclcpp`.
+* **Package Installation:** requires `packages` to run nodes; `pip3 install packaging`.
+
 ***
 ## How to Build
  
