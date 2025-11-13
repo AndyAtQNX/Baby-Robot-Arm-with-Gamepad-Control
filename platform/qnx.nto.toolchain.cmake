@@ -23,6 +23,11 @@ message(STATUS "using CPUVAR ${CPUVAR}")
 message(STATUS "using CPUVARDIR ${CPUVARDIR}")
 message(STATUS "using ARCH ${ARCH}")
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
+message(STATUS "using CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}")
+
+set(PythonInterp_DIR "/usr/local/qnx/env/bin/python3.11")
+
 set(QNX TRUE)
 set(CMAKE_SYSTEM_NAME QNX)
 
