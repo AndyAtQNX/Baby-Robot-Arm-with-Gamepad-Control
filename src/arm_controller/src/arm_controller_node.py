@@ -154,7 +154,7 @@ class ArmControllerNode(Node):
         for i, value in enumerate(msg.axes):
             if abs(value) > self.DEADZONE:
                 axes[i] = value
- 
+
         # 2. Home button ('Y') is a master override that always works and cancels screensaver.
         if msg.buttons[3] == 1 and not self.home_button_was_pressed:
             self.get_logger().info("Home button pressed. Setting target to center.")
@@ -166,7 +166,7 @@ class ArmControllerNode(Node):
  
         # 3. Check for other joystick/button input that should CANCEL the screensaver.
         is_joystick_moved = any(axes)
-        is_action_button_pressed = any(msg.buttons[i] == 1 for i in [4, 5])
+        is_action_button_pressed = any(msg.buttons[i] == 1 for i in [4, 5, 10, 11])
  
         if self.screensaver_active and (is_joystick_moved or is_action_button_pressed):
             self.screensaver_active = False
@@ -223,12 +223,17 @@ class ArmControllerNode(Node):
             # --- Normal Joystick Control Logic ---
             self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]
             self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]
-            self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]
-            self.target_positions[3] += axes[2] * -1 * self.SERVO_SPEEDS[3]
-            self.target_positions[4] += axes[4] * self.SERVO_SPEEDS[4]
+            self.target_positions[2] += axes[2] * self.SERVO_SPEEDS[3]
+            # Swap 3 & 4 below
+            self.target_positions[3] += axes[4] * -1 * self.SERVO_SPEEDS[2]
+            self.target_positions[4] += axes[3] * self.SERVO_SPEEDS[4]
             
-            if msg.buttons[4] == 1: self.target_positions[5] = self.GRIPPER_CLOSED_PERCENT
-            elif msg.buttons[5] == 1: self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
+            if any(msg.buttons[i] == 1 for i in [4, 10]):
+                self.target_positions[5] = self.GRIPPER_CLOSED_PERCENT
+                self.get_logger().info("Closing gripper.")
+            elif any(msg.buttons[i] == 1 for i in [5, 11]):
+                self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
+                self.get_logger().info("Opening gripper.")
  
         # 6. Apply smoothing and send final commands to servos.
         for i in range(len(self.target_positions)):

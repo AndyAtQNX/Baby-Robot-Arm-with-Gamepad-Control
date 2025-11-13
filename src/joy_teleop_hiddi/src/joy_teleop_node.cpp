@@ -179,6 +179,8 @@ private:
         instance_->latest_buttons_[7] = (raw_buttons & SCREEN_R2_GAME_BUTTON) ? 1 : 0;
         instance_->latest_buttons_[8] = (raw_buttons & SCREEN_MENU1_GAME_BUTTON) ? 1 : 0;
         instance_->latest_buttons_[9] = (raw_buttons & SCREEN_MENU2_GAME_BUTTON) ? 1 : 0;
+        instance_->latest_buttons_[10] = (raw_buttons & SCREEN_L3_GAME_BUTTON) ? 1 : 0;
+        instance_->latest_buttons_[11] = (raw_buttons & SCREEN_R3_GAME_BUTTON) ? 1 : 0;
         
         pthread_mutex_unlock(&instance_->joy_state_lock_);
     }
@@ -251,7 +253,7 @@ private:
  
     // Thread-shared vectors for storing the latest joystick state
     std::vector<float> latest_axes_ = std::vector<float>(8, 0.0f);
-    std::vector<int32_t> latest_buttons_ = std::vector<int32_t>(17, 0);
+    std::vector<int32_t> latest_buttons_ = std::vector<int32_t>(19, 0);
  
     // Static members for C-style callbacks
     static JoyTeleopNode* instance_;
