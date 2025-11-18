@@ -25,6 +25,7 @@
  
 #include "parser.h"
 #include <stdio.h>
+#include <screen/screen.h>
  
 // External variable defined in joy_teleop_node.cpp, used for verbose logging if needed.
 extern int verbose;
@@ -168,6 +169,8 @@ static int _parse_d_mode_data(int mode, uint8_t *data) {
             if (data[5] & 0x08) buttons |= SCREEN_R2_GAME_BUTTON;
             if (data[5] & 0x10) buttons |= SCREEN_MENU1_GAME_BUTTON; // BACK
             if (data[5] & 0x20) buttons |= SCREEN_MENU2_GAME_BUTTON; // START
+            if (data[5] & 0x40) buttons |= SCREEN_L3_GAME_BUTTON; // Left stick click
+            if (data[5] & 0x80) buttons |= SCREEN_R3_GAME_BUTTON; // Right stick click
             return buttons;
         }
         // Analog sticks are 8-bit values centered around 128.
