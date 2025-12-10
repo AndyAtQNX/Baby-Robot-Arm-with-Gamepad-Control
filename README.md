@@ -1,9 +1,13 @@
 # Robot Arm with Gamepad Control for QNX
  
-This repository provides a complete ROS2 project for controlling a 6-DOF robotic arm using a standard gamepad controller on the QNX SDP 8.0. The project is designed to run on a Raspberry Pi 4 and demonstrates real-time, intuitive control over the arm's movements.
+This repository provides a complete ROS2 project for controlling a 6-DOF robotic arm using a standard gamepad controller on the QNX SDP 8.0. The project is designed to run on a Raspberry Pi 4B or Pi 5 and demonstrates real-time, intuitive control over the arm's movements.
 
- > **Important:**  
+The project uses the [Arduino-based Robot Arm Model](https://cults3d.com/en/3d-model/various/arduino-based-robot-arm-howtomechatronics) from [How To Mechatronics](https://howtomechatronics.com/) -- check out their website and other models!
+
+> **Important:**  
 > The `joy_teleop_hiddi` node requires access to the low-level HIDDI service, and the `arm_controller` node requires access to the I²C bus. The launch script should be run with root privileges.
+
+(Are you trying this project or something based on it? [Come chat with us in the QNX Discord!](https://discord.gg/Jj4EkkrFTT))
 
 ***
  
