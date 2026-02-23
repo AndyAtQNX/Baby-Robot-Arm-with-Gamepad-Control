@@ -257,8 +257,8 @@ class ArmControllerNode(Node):
             self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]  # Base (Left Stick L/R)
             self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]       # Shoulder (Left Stick U/D)
             self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]       # Elbow (Right Stick U/D)
-            self.target_positions[3] += axes[2] * -1 * self.SERVO_SPEEDS[3]  # Servo 3 (Pitch) controlled by Right Stick L/R (axes[2])
-            self.target_positions[4] += axes[4] * self.SERVO_SPEEDS[4]       # Servo 4 (Roll) controlled by D-Pad L/R (axes[4])       
+            self.target_positions[3] += axes[4] * self.SERVO_SPEEDS[3]       # Servo 3 now on Left Side (D-Pad L/R)
+            self.target_positions[4] += axes[2] * -1 * self.SERVO_SPEEDS[4]  # Servo 4 now on Right Stick L/R      
      
             # Gripper Logic: Shoulders (4/5) OR Stick Clicks (10/11)
             if msg.buttons[4] == 1 or msg.buttons[10] == 1: 
