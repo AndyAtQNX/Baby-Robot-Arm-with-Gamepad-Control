@@ -1,0 +1,177 @@
+<?xml version="1.0" ?>
+<robot name="arm5dof">
+  <link name="world"/>
+  <joint name="world_to_base" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="Base_1"/>
+  </joint>
+
+  <link name="Base_1">
+    <visual name="Base_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Base_1.stl"/>
+      </geometry>
+      <material name="Base_1-material">
+        <color rgba="1 0 1 1"/>
+      </material>
+    </visual>
+    <collision name="Base_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Base_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <link name="Waist_1">
+    <visual name="Waist_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Waist_1.stl"/>
+      </geometry>
+      <material name="Waist_1-material">
+        <color rgba="1 0 0.5 1"/>
+      </material>
+    </visual>
+    <collision name="Waist_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Waist_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="4.7980602e-34 2.8883362e-19 0" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <link name="Arm_01_1">
+    <visual name="Arm_01_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_01_1.stl"/>
+      </geometry>
+      <material name="Arm_01_1-material">
+        <color rgba="0 1 0 1"/>
+      </material>
+    </visual>
+    <collision name="Arm_01_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_01_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <link name="Arm_02_v3_1">
+    <visual name="Arm_02_v3_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_02_v3_1.stl"/>
+      </geometry>
+      <material name="Arm_02_v3_1-material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision name="Arm_02_v3_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_02_v3_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="0.03475 0 0.002" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <link name="Arm_03_1">
+    <visual name="Arm_03_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_03_1.stl"/>
+      </geometry>
+      <material name="Arm_03_1-material">
+        <color rgba="0 0 1 1"/>
+      </material>
+    </visual>
+    <collision name="Arm_03_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Arm_03_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="0.005 0 0" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <link name="Gripper_Assembly_1">
+    <visual name="Gripper_Assembly_1_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Gripper_Assembly_1.stl"/>
+      </geometry>
+      <material name="Gripper_Assembly_1-material">
+        <color rgba="1 0 0.5 1"/>
+      </material>
+    </visual>
+    <collision name="Gripper_Assembly_1_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/Gripper_Assembly_1.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0"/>
+      <inertia ixx="2.3499434e-08" iyy="2.0741885e-08" izz="1.2397406e-08" ixy="2.490078e-09" ixz="-3.4477584e-09" iyz="3.3677954e-09"/>
+      <origin xyz="0.0073981862 -0.055516299 0.0017273101" rpy="0 0 0"/>
+    </inertial>
+  </link>
+  <joint name="dof_joint01" type="revolute">
+    <origin xyz="5.5731661e-33 0.056 4.5892589e-17" rpy="-1.5707963 0 0"/>
+    <parent link="Base_1"/>
+    <child link="Waist_1"/>
+    <axis xyz="0 0 -1"/>
+    <limit effort="1" velocity="1" lower="-2.356" upper="2.356"/>
+  </joint>
+  <joint name="dof_joint02" type="revolute">
+    <origin xyz="-0.004 0.013918506 0.04027648" rpy="3.1415927 -1.5707963 0"/>
+    <parent link="Waist_1"/>
+    <child link="Arm_01_1"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="1" velocity="1" lower="-2.356" upper="2.356"/>
+  </joint>
+  <joint name="dof_joint03" type="revolute">
+    <origin xyz="0.12 0 0" rpy="3.1415927 0 0"/>
+    <parent link="Arm_01_1"/>
+    <child link="Arm_02_v3_1"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="1" velocity="1" lower="-2.356" upper="2.356"/>
+  </joint>
+  <joint name="dof_joint04" type="revolute">
+    <origin xyz="0.08975 0.0053 0.0075" rpy="-1.5707963 0 -1.5707963"/>
+    <parent link="Arm_02_v3_1"/>
+    <child link="Arm_03_1"/>
+    <axis xyz="0 0 -1"/>
+    <limit effort="1" velocity="1" lower="-1.5708" upper="1.5708"/>
+  </joint>
+  <joint name="Revolute_1" type="revolute">
+    <origin xyz="0.005 0.014 0.028" rpy="-1.5707963 0 0"/>
+    <parent link="Arm_03_1"/>
+    <child link="Gripper_Assembly_1"/>
+    <axis xyz="0 0 -1"/>
+    <limit effort="1" velocity="1" lower="-1.5708" upper="1.5708"/>
+  </joint>
+</robot>
