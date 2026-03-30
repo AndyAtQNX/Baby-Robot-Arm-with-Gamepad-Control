@@ -2,4 +2,3 @@ build/
 install/
 log/
 transfer.sh
-fresh-env/
