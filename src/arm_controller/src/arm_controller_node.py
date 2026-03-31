@@ -1,4 +1,3 @@
-
 #!/system/bin/env python3
 """
 Copyright (c) 2025, BlackBerry Limited. All rights reserved.
