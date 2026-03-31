@@ -112,7 +112,7 @@
       this->declare_parameter<std::string>("base_link", "world");
       this->declare_parameter<std::string>("end_effector_link", "Gripper_Assembly_1");
       this->declare_parameter<double>("update_rate", 50.0);
-      this->declare_parameter<double>("velocity_scale", 0.05);
+      this->declare_parameter<double>("velocity_scale", 0.1);
       this->declare_parameter<bool>("limits_updated_up", false);
       this->declare_parameter<bool>("limits_updated_low", false);
 
@@ -595,6 +595,11 @@
 
       // This is used as the initial guess for the next solve
       current_joint_positions_ = solution;
+
+      fk_solver_->JntToCart(
+              current_joint_positions_,
+              cartesian_target_
+          );
 
       publishJointCommand(solution);
 
