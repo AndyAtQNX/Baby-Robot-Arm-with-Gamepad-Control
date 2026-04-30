@@ -5,35 +5,16 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-set(EIGEN3_INCLUDE_DIR "$ENV{QNX_TARGET}/aarch64le/opt/ros/humble/include/eigen3")
-
-# Mark Eigen3 as "found" so orocos_kdl doesn't search for it
-set(EIGEN3_FOUND TRUE)
-set(Eigen3_FOUND TRUE)
-
-# Also set the CMake standard Eigen3 variables
-set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
-set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
-
-message(STATUS "Pre-configured Eigen3: ${EIGEN3_INCLUDE_DIR}")
-# ===================================================================
-# Find ROS packages
-# ===================================================================
-
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(urdf REQUIRED)
 find_package(std_msgs REQUIRED)
-# Now find orocos_kdl (will use our pre-set EIGEN3_INCLUDE_DIR)
 find_package(orocos_kdl REQUIRED)
-
-# Find kdl_parser
 find_package(kdl_parser REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-# ===================================================================
-# Build executable
-# ===================================================================
+include_directories(include)
 
 add_executable(ik_solver_node
   src/ik_solver_node.cpp

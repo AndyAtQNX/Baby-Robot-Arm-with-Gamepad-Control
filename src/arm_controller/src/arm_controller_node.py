@@ -47,6 +47,7 @@ Key Features:
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 from PCA9685 import PCA9685
 import time
@@ -82,13 +83,14 @@ class ArmControllerNode(Node):
             1.5   # Servo 5: Gripper
         ]
 
+# These are the full range of all the servos present in the arm. It is used to map the IK solver's radian outputs to percentage values for the servos.
         self.MAX_JOINT_LIMITS = [
-            (-2.356, 2.356),      # Joint 0: Base         25%-75%  of 270° = ±67.5°
-            (-2.356, 2.356),      # Joint 1: Shoulder      0%-50%  of 270° = -135° to 0°
-            (-2.356,  2.356),       # Joint 2: Elbow     ← CRITICAL: prevents singularity
-            (-1.5708,   1.5708),   # Joint 3: Wrist pitch
-            (-1.5708,   1.5708),  # Joint 4: Wrist roll
-            (-1.5708,   1.5708),  # Joint 5: Gripper
+            (-2.356,  2.356),
+            (-2.356,  2.356),
+            (-2.356,  2.356),
+            (-1.5708, 1.5708),
+            (-1.5708, 1.5708),
+            (-1.5708, 1.5708),
         ]
         
         self.GRIPPER_CLOSED_PERCENT = 15
@@ -145,8 +147,8 @@ class ArmControllerNode(Node):
 
         self.ik_target_positions = [50.0] * self.NUM_SERVOS
         self.ik_data_updated     = False
-        self.target_positions = list(self.CENTER_POSITIONS)
-        self.current_positions = list(self.CENTER_POSITIONS)
+        self.target_positions    = list(self.CENTER_POSITIONS)
+        self.current_positions   = list(self.CENTER_POSITIONS)
 
         # Gamepad-specific states
         self.home_button_was_pressed = False
@@ -192,9 +194,9 @@ class ArmControllerNode(Node):
             10
         )
 
-     ## @brief Subscription to IK solver output containing joint
+        ## @brief Subscription to IK solver output containing joint
         ## angles in radians for joints 0-4.
-        self.mov_subscription = self.create_subscription(Float64MultiArray, '/Mov', self.mov_callback, 10)
+        self.mov_subscription = self.create_subscription(JointState, '/Mov', self.mov_callback, 10)
         
         # The Main Control Loop for smoothing and PWM, runs at 50Hz (0.02s)
         self.smoothing_timer = self.create_timer(0.02, self.smoothing_loop)
@@ -202,13 +204,6 @@ class ArmControllerNode(Node):
         self.get_logger().info("Centering arm on startup...")
         self.center_all_servos()
         self.get_logger().info("Arm centered. Waiting for commands...")
-
-        # Publish initial servo limit information to IK solver
-        # as radians with a flag indicating min (1) or max (2) limits
-        lim = self.percentage_to_radians(self.SERVO_MIN)
-        self.curr_pos_pub.publish(Float64MultiArray(data=lim))
-        lim = self.percentage_to_radians(self.SERVO_MAX)
-        self.curr_pos_pub.publish(Float64MultiArray(data=lim))
 
     ## --------------------------------------------------------------------------
     ## Main Hardware Control and Smoothing Loop
@@ -234,12 +229,12 @@ class ArmControllerNode(Node):
         """
         # Check for inactivity timeout (only if screensaver is off)
         has_timed_out = (time.time() - self.last_input_time) > self.SERVO_RELEASE_TIMEOUT_SEC
-        if has_timed_out and not self.screensaver_active and not self.servos_are_released and not self.ik_mode_active:
+        if has_timed_out and not self.screensaver_active and not self.servos_are_released:
             self.get_logger().info("Inactivity detected. Releasing servos.")
             self.release_all_servos()
+            return
 
-        if self.ik_mode_active:
-            if self.ik_data_updated and self.ik_raw_data and not self.screensaver_active:
+        if self.ik_mode_active and self.ik_data_updated and self.ik_raw_data and not self.screensaver_active:
                 self.ik_data_updated = False
 
                 # Convert radians to percentages here
@@ -251,7 +246,8 @@ class ArmControllerNode(Node):
         # Apply smoothing and send final commands to servos
         for i in range(self.NUM_SERVOS):
             # Enforce dynamic boundaries here instead of hardcoded 0.0/100.0
-            self.target_positions[i] = max(self.SERVO_MIN[i], min(self.SERVO_MAX[i], self.target_positions[i]))
+            if not self.ik_mode_active:
+                self.target_positions[i] = max(self.SERVO_MIN[i], min(self.SERVO_MAX[i], self.target_positions[i]))
             
             error = self.target_positions[i] - self.current_positions[i]
             self.current_positions[i] += error * self.SMOOTHING_FACTOR
@@ -271,7 +267,7 @@ class ArmControllerNode(Node):
         3. Handle home position (Y button)
         4. Handle screensaver toggle (Start button)
         5. Execute active mode logic:
-            - Screensaver: Lissajous figure motion
+            - Screensaver mode: Move in a pattern and pause periodically
             - IK mode: Publish Cartesian commands to /CartesianCmd
             - Direct mode: Update target_positions from joystick axes
         6. Handle gripper (LB/RB or stick clicks) in all modes
@@ -368,9 +364,9 @@ class ArmControllerNode(Node):
             elif is_joystick_moved or self.home_button_was_pressed: # Allow IK commands if joystick is moved or Home button is pressed
                 cmd = Float64MultiArray()
                 cmd.data = [
-                    float(axes[4]),
-                    float(axes[5]),
-                    float(axes[3]),
+                    float(-axes[0]),
+                    float( axes[1]),
+                    float( axes[3]),
                     1.0 if self.home_button_was_pressed else 0.0 # data[3]: home button
                 ]
                 self.cartesian_pub.publish(cmd)
@@ -383,7 +379,7 @@ class ArmControllerNode(Node):
                 self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
                 self.get_logger().info("Opening gripper.")
 
-    def mov_callback(self, msg: Float64MultiArray):
+    def mov_callback(self, msg: JointState):
         """
         @brief Receives joint angles from the IK solver node.
 
@@ -399,11 +395,11 @@ class ArmControllerNode(Node):
             data[3]: Joint 3 angle (Wrist Pitch)
             data[4]: Joint 4 angle (Wrist Roll)
         """        
-        if len(msg.data) < 1:
+        if len(msg.position) < 1:
             return 
 
     # Just store the raw radian values — no processing here
-        self.ik_raw_data = list(msg.data)
+        self.ik_raw_data = list(msg.position)
         self.ik_data_updated = True
         
    

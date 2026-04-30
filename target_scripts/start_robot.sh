@@ -33,17 +33,24 @@ SERVO_MIN_LIMITS="[25.0, 0.0, 50.0, 0.0, 0.0, 15.0]"
 # Base: 75 (restricted right), Shoulder/Elbow: 50 (stops at upright), Gripper: 65 (open)
 SERVO_MAX_LIMITS="[75.0, 50.0, 100.0, 100.0, 100.0, 65.0]"
 
+# Cartesian limits for the IK solver (X, Y, Z)
+CART_MIN_LIMITS="[-0.16, -0.10, -0.145]"
+CART_MAX_LIMITS="[ 0.16,  0.21, -0.014]"
+
 # --- Starting the ROS2 Nodes ---
 echo "Starting Joy Teleop, IK Solver, and Arm Controller nodes..."
 
 # Run the C++ joystick node in the background
-on -C3 ros2 run joy_teleop_hiddi joy_teleop_node &
+ros2 run joy_teleop_hiddi joy_teleop_node &
 
-# Run the IK solver node in the background
-on -C2 ros2 run ik_solver ik_solver_node &
+# Run the IK solver node in the background with the Cartesian limits.
+ros2 run ik_solver ik_solver_node \
+    --ros-args \
+    -p cart_min_limits:="${CART_MIN_LIMITS}" \
+    -p cart_max_limits:="${CART_MAX_LIMITS}" &
 
 # Run the Python arm controller node in the background with the limits.
-on -C1 ros2 run arm_controller arm_controller_node.py \
+ros2 run arm_controller arm_controller_node.py \
     --ros-args \
     -p servo_min_limits:="${SERVO_MIN_LIMITS}" \
     -p servo_max_limits:="${SERVO_MAX_LIMITS}" &
@@ -53,4 +60,3 @@ echo "All nodes started. Press Ctrl+C in this terminal to stop both."
 wait
  
 echo "All nodes have been shut down. Script finished."
- 
