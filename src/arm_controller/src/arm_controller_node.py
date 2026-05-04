@@ -19,7 +19,7 @@ limitations under the License.
  
 This node manages all hardware-level servo control for a 5-DOF robotic arm
 (plus gripper) using joystick input and/or inverse kinematics (IK) commands.
-It subscribes to joystick messages and IK solver output, converts commands
+It subscribes to joystick messages(/joy) and IK solver output(/Mov), converts commands
 to PWM signals, and sends them to the servos via a PCA9685 PWM driver over I2C.
  
 Key Features:
