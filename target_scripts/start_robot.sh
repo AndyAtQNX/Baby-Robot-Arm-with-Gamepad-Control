@@ -2,9 +2,9 @@
  
 # --- Set Environment Variables ---
 # These paths are needed for ROS2 to find its libraries and Python packages.
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/home/qnxuser/opt/ros/humble/lib
-export URDF_PATH=$URDF_PATH/data/home/qnxuser/opt/ros/nodes/share/ik_solver/config
-export PYTHONPATH=$PYTHONPATH:/data/home/qnxuser/opt/ros/humble/usr/lib/python3.11/site-packages/:/data/home/qnxuser/.local/lib/python3.11/site-packages/
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/data/home/qnxuser/opt/ros/humble/lib"
+export URDF_PATH="$URDF_PATH/data/home/qnxuser/opt/ros/nodes/share/ik_solver/config"
+export PYTHONPATH="$PYTHONPATH:/data/home/qnxuser/opt/ros/humble/usr/lib/python3.11/site-packages/:/data/home/qnxuser/.local/lib/python3.11/site-packages/"
 export COLCON_PYTHON_EXECUTABLE=/system/bin/python3
  
 # --- Sourcing ROS2 ---

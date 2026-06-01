@@ -104,7 +104,7 @@ private:
      * @param filename Name of the URDF file to find (e.g. "arm5dof.urdf").
      * @return Full path to the URDF file, or empty string if not found.
      */
-    std::string findURDF(const std::string &filename);
+    std::string find_URDF(const std::string &filename);
 
     /**
      * @brief Loads the URDF file and constructs the KDL kinematic chain.
@@ -114,14 +114,14 @@ private:
      *
      * @return true if URDF loaded and chain extracted successfully.
      */
-    bool loadURDF();
+    bool load_URDF();
 
     /**
      * @brief Extracts movable joint names from the KDL chain.
      *
      * Skips fixed joints (KDL::Joint::None) such as the world_to_base joint.
      */
-    void extractJointNames();
+    void extract_joint_names();
 
     // ======================================================================
     // Solver Initialization
@@ -136,7 +136,7 @@ private:
      *
      * @return true if both solvers initialized successfully.
      */
-    bool initSolvers();
+    bool init_solvers();
 
     // ======================================================================
     // Cartesian Workspace Limits
@@ -151,7 +151,7 @@ private:
      * @param target The Cartesian target frame to clamp.
      * @return true if any axis was clamped.
      */
-    bool clampCartesianTarget(KDL::Frame &target);
+    bool clamp_cartesian_target(KDL::Frame &target);
 
     // ======================================================================
     // ROS2 Callbacks
@@ -190,7 +190,7 @@ private:
      *
      * @param joint_angles KDL JntArray with solved joint angles in radians.
      */
-    void publishJointCommand(const KDL::JntArray &joint_angles);
+    void publish_joint_command(const KDL::JntArray &joint_angles);
 
     // ======================================================================
     // Member Variables
@@ -205,15 +205,15 @@ private:
 
     /// @brief Publisher for computed joint angles to /Mov topic.
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
-        joint_command_publisher_;
+        joint_command_publisher_ = nullptr;
 
     /// @brief Subscription for Cartesian velocity commands.
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
-        cartesian_subscription_;
+        cartesian_subscription_ = nullptr;
 
     /// @brief Subscription for current positions from arm controller.
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr
-        pos_subscription_;
+        pos_subscription_ = nullptr;
 
     // --- URDF and KDL ---
 

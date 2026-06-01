@@ -19,13 +19,13 @@ limitations under the License.
  
 This node manages all hardware-level servo control for a 5-DOF robotic arm
 (plus gripper) using joystick input and/or inverse kinematics (IK) commands.
-It subscribes to joystick messages(/joy) and IK solver output(/Mov), converts commands
+It subscribes to joystick messages(/joy) and IK solver output(/mov), converts commands
 to PWM signals, and sends them to the servos via a PCA9685 PWM driver over I2C.
  
 Key Features:
 - Dual Control Modes: Supports both direct joystick control and IK-based
   Cartesian control, toggled via gamepad button B.
-- Inverse Kinematics Integration: Subscribes to /Mov topic for joint angles
+- Inverse Kinematics Integration: Subscribes to /mov topic for joint angles
   from the IK solver node, converts radians to servo percentages using
   asymmetric joint limit mapping where 0 rad always equals 50% (neutral).
 - Cartesian Command Publishing: In IK mode, publishes joystick axes as
@@ -196,7 +196,7 @@ class ArmControllerNode(Node):
 
         ## @brief Subscription to IK solver output containing joint
         ## angles in radians for joints 0-4.
-        self.mov_subscription = self.create_subscription(JointState, '/Mov', self.mov_callback, 10)
+        self.mov_subscription = self.create_subscription(JointState, '/mov', self.mov_callback, 10)
         
         # The Main Control Loop for smoothing and PWM, runs at 50Hz (0.02s)
         self.smoothing_timer = self.create_timer(0.02, self.smoothing_loop)
