@@ -429,10 +429,7 @@ class ArmControllerNode(Node):
             max_angle  = self.MAX_JOINT_LIMITS[i][1]
 
             if angle_rad >= 0.0:
-                if angle_rad == 0.0:
-                    percentage = 50.0
-                else:
-                    percentage = 50.0 + (angle_rad / max_angle) * 50.0
+                percentage = 50.0 + (angle_rad / max_angle) * 50.0
 
             else:
                 percentage = 50.0 + (angle_rad / abs(min_angle)) * 50.0
@@ -473,7 +470,6 @@ class ArmControllerNode(Node):
             radians.append(float(2)) 
         elif percentages == self.SERVO_MIN:
             radians.append(float(1))
-    
 
         return radians
 

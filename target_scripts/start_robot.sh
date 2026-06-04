@@ -34,7 +34,7 @@ SERVO_MIN_LIMITS="[25.0, 0.0, 50.0, 0.0, 0.0, 15.0]"
 SERVO_MAX_LIMITS="[75.0, 50.0, 100.0, 100.0, 100.0, 65.0]"
 
 # Cartesian limits for the IK solver (X, Y, Z)
-CART_MIN_LIMITS="[-0.16, -0.10, -0.145]"
+CART_MIN_LIMITS="[-0.16,  0.10, -0.145]"
 CART_MAX_LIMITS="[ 0.16,  0.21, -0.014]"
 
 # --- Starting the ROS2 Nodes ---
