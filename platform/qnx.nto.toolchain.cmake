@@ -122,7 +122,7 @@ endfunction()
 # Workaround to fix Eigen3Config.cmake setting eigen3 include dirs to
 # ${QNX_STAGE}/${CPUVARDIR}/usr/include/ instead of ${QNX_STAGE}/usr/include/
 # without having to modify any of the files outside the toolchain file
-set(Eigen3_INCLUDE_DIRS ${ROS_EXTERNAL_DEPS_INSTALL}/usr/include/eigen3)
+set(Eigen3_INCLUDE_DIRS ${ROS_EXTERNAL_DEPS_INSTALL}/include/eigen3)
 set(EIGEN3_FOUND TRUE)
 #######################################################################
 

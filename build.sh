@@ -68,7 +68,7 @@ for arch in aarch64; do
         -DROS2_HOST_INSTALLATION_PATH=$ROS2_HOST_INSTALLATION_PATH \
         -DROS_EXTERNAL_DEPS_INSTALL=${QNX_TARGET}/${CPUVARDIR}/opt/ros/humble \
         -Wno-dev --no-warn-unused-cli \
-    --packages-select  joy_teleop_hiddi arm_controller
+    --packages-select  joy_teleop_hiddi arm_controller ik_solver
  
     rc=$?
     if [ $rc -eq 0 ]; then

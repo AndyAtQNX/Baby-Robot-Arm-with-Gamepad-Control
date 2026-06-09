@@ -15,15 +15,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
  
 @file arm_controller_node.py
-@brief ROS2 node for controlling a 6-DOF robotic arm with a joystick.
+@brief ROS2 node for controlling a 5-DOF robotic arm with a joystick.
  
-This node subscribes to `/joy` messages from a joystick teleop node,
-interprets the joystick input as velocity commands for the arm's servos,
-and sends the appropriate PWM signals via a PCA9685 servo driver.
+This node manages all hardware-level servo control for a 5-DOF robotic arm
+(plus gripper) using joystick input and/or inverse kinematics (IK) commands.
+It subscribes to joystick messages(/joy) and IK solver output(/mov), converts commands
+to PWM signals, and sends them to the servos via a PCA9685 PWM driver over I2C.
  
 Key Features:
-- Incremental Control: Joystick axes control the speed of the servos, not
-  their absolute position, allowing the arm to hold its position on release.
+- Dual Control Modes: Supports both direct joystick control and IK-based
+  Cartesian control, toggled via gamepad button B.
+- Inverse Kinematics Integration: Subscribes to /mov topic for joint angles
+  from the IK solver node, converts radians to servo percentages using
+  asymmetric joint limit mapping where 0 rad always equals 50% (neutral).
+- Cartesian Command Publishing: In IK mode, publishes joystick axes as
+  Cartesian velocity commands to /CartesianCmd for the IK solver.
+- Position Feedback: Publishes current servo positions as radians to
+  /CurrentPositions for IK solver state synchronization.
 - Smoothing Factor: Implements an interpolation (easing) function to ensure
   all arm movements are smooth/controlled.
 - Individual Servo Speed Tuning: Allows each of the 6 servos to have a unique
@@ -39,9 +47,13 @@ Key Features:
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
 from PCA9685 import PCA9685
 import time
 import math
+import numpy as np
+
  
 class ArmControllerNode(Node):
     """
@@ -69,6 +81,16 @@ class ArmControllerNode(Node):
             0.7,  # Servo 3: Wrist Pitch (Swapped: Was Roll, now Pitch)
             1.5,  # Servo 4: Wrist Roll  (Swapped: Was Pitch, now Roll)
             1.5   # Servo 5: Gripper
+        ]
+
+# These are the full range of all the servos present in the arm. It is used to map the IK solver's radian outputs to percentage values for the servos.
+        self.MAX_JOINT_LIMITS = [
+            (-2.356,  2.356),
+            (-2.356,  2.356),
+            (-2.356,  2.356),
+            (-1.5708, 1.5708),
+            (-1.5708, 1.5708),
+            (-1.5708, 1.5708),
         ]
         
         self.GRIPPER_CLOSED_PERCENT = 15
@@ -118,8 +140,15 @@ class ArmControllerNode(Node):
         ## --------------------------------------------------------------------------
         ## State Storage
         ## --------------------------------------------------------------------------
-        self.target_positions = list(self.CENTER_POSITIONS)
-        self.current_positions = list(self.CENTER_POSITIONS)
+
+        self.ik_mode_active = True
+        self.ik_mode_button_was_pressed = False
+        self.ik_raw_data = []
+
+        self.ik_target_positions = [50.0] * self.NUM_SERVOS
+        self.ik_data_updated     = False
+        self.target_positions    = list(self.CENTER_POSITIONS)
+        self.current_positions   = list(self.CENTER_POSITIONS)
 
         # Gamepad-specific states
         self.home_button_was_pressed = False
@@ -148,31 +177,77 @@ class ArmControllerNode(Node):
         # Subscription to the joystick controller
         self.joy_subscription = self.create_subscription(Joy, '/joy', self.joy_callback, 10)
         
+        ## @brief Publisher for Cartesian velocity commands sent to
+        ## the IK solver when in IK mode.
+        ## Message format: [X_vel, Y_vel, Z_vel, home_flag]
+        self.cartesian_pub = self.create_publisher(
+            Float64MultiArray, 
+            '/CartesianCmd',
+            10
+        )
+
+        ## @brief Publisher for current joint positions in radians,
+        ## used by the IK solver for state synchronization.
+        self.curr_pos_pub = self.create_publisher(
+            Float64MultiArray, 
+            '/CurrentPositions',
+            10
+        )
+
+        ## @brief Subscription to IK solver output containing joint
+        ## angles in radians for joints 0-4.
+        self.mov_subscription = self.create_subscription(JointState, '/mov', self.mov_callback, 10)
+        
         # The Main Control Loop for smoothing and PWM, runs at 50Hz (0.02s)
         self.smoothing_timer = self.create_timer(0.02, self.smoothing_loop)
         
         self.get_logger().info("Centering arm on startup...")
         self.center_all_servos()
         self.get_logger().info("Arm centered. Waiting for commands...")
+
     ## --------------------------------------------------------------------------
     ## Main Hardware Control and Smoothing Loop
     ## --------------------------------------------------------------------------
+
     def smoothing_loop(self):
         """
-        This is the main hardware loop. It runs at 50Hz and smoothly
-        moves the servos to the self.target_positions, regardless of
-        what controller set them.
+        @brief Main hardware control loop running at 50Hz.
+
+        This is the core servo control function that runs every 20ms.
+        It performs three operations in order:
+            1. Checks for inactivity timeout and releases servos if needed
+            2. Applies incoming IK data to target positions (if IK mode active)
+            3. Smooths current positions toward targets using exponential easing
+               and sends PWM commands to all servos
+
+        The smoothing uses a first-order low-pass filter:
+            current += (target - current) * SMOOTHING_FACTOR
+
+        All target positions are clamped to configured SERVO_MIN/MAX limits
+        before smoothing to protect hardware from out-of-range commands.
+
         """
-        
         # Check for inactivity timeout (only if screensaver is off)
         has_timed_out = (time.time() - self.last_input_time) > self.SERVO_RELEASE_TIMEOUT_SEC
         if has_timed_out and not self.screensaver_active and not self.servos_are_released:
             self.get_logger().info("Inactivity detected. Releasing servos.")
             self.release_all_servos()
-        #  Apply smoothing and send final commands to servos
+            return
+
+        if self.ik_mode_active and self.ik_data_updated and self.ik_raw_data and not self.screensaver_active:
+                self.ik_data_updated = False
+
+                # Convert radians to percentages here
+                percentages = self.ik_to_percentage(self.ik_raw_data)
+
+                for i in range(min(len(percentages), self.NUM_SERVOS - 1 )):
+                    self.target_positions[i] = percentages[i]
+
+        # Apply smoothing and send final commands to servos
         for i in range(self.NUM_SERVOS):
             # Enforce dynamic boundaries here instead of hardcoded 0.0/100.0
-            self.target_positions[i] = max(self.SERVO_MIN[i], min(self.SERVO_MAX[i], self.target_positions[i]))
+            if not self.ik_mode_active:
+                self.target_positions[i] = max(self.SERVO_MIN[i], min(self.SERVO_MAX[i], self.target_positions[i]))
             
             error = self.target_positions[i] - self.current_positions[i]
             self.current_positions[i] += error * self.SMOOTHING_FACTOR
@@ -180,12 +255,22 @@ class ArmControllerNode(Node):
             # Only send PWM commands if servos are not supposed to be released
             if not self.servos_are_released:
                 self.setPercent(i, self.current_positions[i])
-    ## --------------------------------------------------------------------------
-    ## Input Callback
-    ## --------------------------------------------------------------------------
+
+
     def joy_callback(self, msg: Joy):
         """
-        This callback runs ONLY when a message from the Gamepad is received.
+        @brief Callback for joystick input, handling mode toggles, home, screensaver, and control commands.
+        @param msg (Joy): The joystick message containing axes and button states.
+        Control flow:
+        1. Reset inactivity timer on any input
+        2. Handle mode toggle (B button)
+        3. Handle home position (Y button)
+        4. Handle screensaver toggle (Start button)
+        5. Execute active mode logic:
+            - Screensaver mode: Move in a pattern and pause periodically
+            - IK mode: Publish Cartesian commands to /CartesianCmd
+            - Direct mode: Update target_positions from joystick axes
+        6. Handle gripper (LB/RB or stick clicks) in all modes
         """
         # Check for gamepad input to reset inactivity timer
         axes = [0.0] * len(msg.axes)
@@ -200,7 +285,16 @@ class ArmControllerNode(Node):
                 self.get_logger().info("Gamepad input detected. Re-engaging servos.")
                 self.current_positions = list(self.target_positions)
                 self.servos_are_released = False
-        
+
+        if msg.buttons[1] == 1 and not self.ik_mode_button_was_pressed:
+            self.ik_mode_active = not self.ik_mode_active
+            mode = "IK Mode" if self.ik_mode_active else "Joystick Mode"
+            self.get_logger().info(f"Toggled {mode} with button B.")
+            if self.ik_mode_active:
+                pos = self.percentage_to_radians(self.current_positions)
+                self.curr_pos_pub.publish(Float64MultiArray(data=pos))
+        self.ik_mode_button_was_pressed = (msg.buttons[1] == 1)
+
         # Home button ('Y') is a master override
         if msg.buttons[3] == 1 and not self.home_button_was_pressed:
             self.get_logger().info("Home button pressed. Setting target to safe center.")
@@ -214,6 +308,9 @@ class ArmControllerNode(Node):
         # Check for shoulder buttons (4,5) OR stick clicks (10,11)
         is_action_button_pressed = any(msg.buttons[i] == 1 for i in [4, 5, 10, 11])
         if self.screensaver_active and (is_joystick_moved or is_action_button_pressed):
+            if self.ik_mode_active:
+                pos = self.percentage_to_radians(self.target_positions)
+                self.curr_pos_pub.publish(Float64MultiArray(data=pos))
             self.screensaver_active = False
             self.get_logger().info("Screensaver deactivated by user input.")
         # Screensaver toggle logic ('START' button, index 9)
@@ -224,6 +321,9 @@ class ArmControllerNode(Node):
                 self.screensaver_time = 0.0
                 self.screensaver_is_paused = False
             else:
+                if self.ik_mode_active:
+                    pos = self.percentage_to_radians(self.target_positions)
+                    self.curr_pos_pub.publish(Float64MultiArray(data=pos))
                 self.get_logger().info("Screensaver deactivated.")
         self.screensaver_button_was_pressed = (msg.buttons[9] == 1)
         # Execute the correct logic
@@ -253,12 +353,23 @@ class ArmControllerNode(Node):
                     self.target_positions[5] = self.DRAWING_POSE[5]
             
         elif not self.servos_are_released:
+            if not self.ik_mode_active:
             # --- Normal Joystick Control Logic ---
-            self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]  # Base (Left Stick L/R)
-            self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]       # Shoulder (Left Stick U/D)
-            self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]       # Elbow (Right Stick U/D)
-            self.target_positions[3] += axes[4] * self.SERVO_SPEEDS[3]       # Servo 3 now on Left Side (D-Pad L/R)
-            self.target_positions[4] += axes[2] * -1 * self.SERVO_SPEEDS[4]  # Servo 4 now on Right Stick L/R      
+                self.target_positions[0] += axes[0] * -1 * self.SERVO_SPEEDS[0]  # Base (Left Stick L/R)
+                self.target_positions[1] += axes[1] * self.SERVO_SPEEDS[1]       # Shoulder (Left Stick U/D)
+                self.target_positions[2] += axes[3] * self.SERVO_SPEEDS[2]       # Elbow (Right Stick U/D)
+                self.target_positions[3] += axes[4] * self.SERVO_SPEEDS[3]       # Servo 3 now on Left Side (D-Pad L/R)
+                self.target_positions[4] += axes[2] * -1 * self.SERVO_SPEEDS[4]  # Servo 4 now on Right Stick L/R
+            
+            elif is_joystick_moved or self.home_button_was_pressed: # Allow IK commands if joystick is moved or Home button is pressed
+                cmd = Float64MultiArray()
+                cmd.data = [
+                    float(-axes[0]),
+                    float( axes[1]),
+                    float( axes[3]),
+                    1.0 if self.home_button_was_pressed else 0.0 # data[3]: home button
+                ]
+                self.cartesian_pub.publish(cmd)
      
             # Gripper Logic: Shoulders (4/5) OR Stick Clicks (10/11)
             if msg.buttons[4] == 1 or msg.buttons[10] == 1: 
@@ -268,9 +379,100 @@ class ArmControllerNode(Node):
                 self.target_positions[5] = self.GRIPPER_OPEN_PERCENT
                 self.get_logger().info("Opening gripper.")
 
+    def mov_callback(self, msg: JointState):
+        """
+        @brief Receives joint angles from the IK solver node.
+
+        Stores raw radian values for processing by smoothing_loop.
+        Kept lightweight to avoid blocking the 50Hz control loop.
+        Only fires when the IK solver publishes new data (event-driven,
+        not polled).
+
+        @param msg: Float64MultiArray containing joint angles in radians.
+            data[0]: Joint 0 angle (Base)
+            data[1]: Joint 1 angle (Shoulder)
+            data[2]: Joint 2 angle (Elbow)
+            data[3]: Joint 3 angle (Wrist Pitch)
+            data[4]: Joint 4 angle (Wrist Roll)
+        """        
+        if len(msg.position) < 1:
+            return 
+
+    # Just store the raw radian values — no processing here
+        self.ik_raw_data = list(msg.position)
+        self.ik_data_updated = True
+        
+   
     ## --------------------------------------------------------------------------
     ## Hardware Helper Functions
     ## --------------------------------------------------------------------------
+    def ik_to_percentage(self, joint_angles_rad):
+        """
+        @brief Converts joint angles in radians to servo percentages (0-100).
+
+        Maps radians to percentages using asymmetric joint limit handling:
+            0 rad = 50% = 1500us = physical neutral [DS3218/MG90S Datasheets]
+            Positive angles map from 50% toward 100%
+            Negative angles map from 50% toward 0%
+
+        Each direction uses its own limit for mapping, allowing asymmetric
+        joint ranges (e.g. shoulder can only move in one direction from neutral).
+
+        @param joint_angles_rad: List of joint angles in radians from IK solver.
+        @return: List of servo percentages (0.0 to 100.0) for each joint.
+        """
+        
+        percentages = []
+
+        for i, angle_rad in enumerate(joint_angles_rad[:self.NUM_SERVOS]):
+            min_angle  = self.MAX_JOINT_LIMITS[i][0]
+            max_angle  = self.MAX_JOINT_LIMITS[i][1]
+
+            if angle_rad >= 0.0:
+                percentage = 50.0 + (angle_rad / max_angle) * 50.0
+
+            else:
+                percentage = 50.0 + (angle_rad / abs(min_angle)) * 50.0
+
+            percentages.append(percentage)
+
+        return percentages
+
+    def percentage_to_radians(self, percentages):
+        """
+        @brief Converts servo percentages (0-100) to joint angles in radians.
+
+        Inverse of ik_to_percentage. Uses asymmetric mapping:
+            50% = 0 rad = 1500us neutral [DS3218/MG90S Datasheets]
+            Above 50%: maps toward positive max_angle
+            Below 50%: maps toward negative min_angle
+
+        Appends two extra values to the output:
+            - A zero placeholder for the gripper joint
+            - A flag indicating whether this is min limits (1),
+              max limits (2), or regular position data (0)
+
+        @param percentages: List of servo percentages (0-100) for each joint.
+        @return: List of joint angles in radians with appended flag values.
+        """
+        radians = []
+        for i, percentage in enumerate(percentages):
+            min_angle = self.MAX_JOINT_LIMITS[i][0]
+            max_angle = self.MAX_JOINT_LIMITS[i][1]
+            if percentage >= 50:
+                angle_rad = ((percentage - 50) / 50) * max_angle
+            else:
+                angle_rad = ((percentage - 50) / 50) * abs(min_angle)
+            radians.append(angle_rad)
+        
+        radians.append(float(0))
+        if percentages == self.SERVO_MAX:
+            radians.append(float(2)) 
+        elif percentages == self.SERVO_MIN:
+            radians.append(float(1))
+
+        return radians
+
 
     def setPercent(self, servo, percentage):
         """
@@ -279,11 +481,11 @@ class ArmControllerNode(Node):
         if not 0 <= servo <= self.NUM_SERVOS: return
         percentage = max(0, min(100, percentage))
 
-        if (servo == 0): max_pulse, min_pulse = 1060, 570
-        elif (servo == 1): max_pulse, min_pulse = 1060, 750
-        elif (servo == 2): max_pulse, min_pulse = 1020, 606
-        elif (servo == 3): max_pulse, min_pulse = 1010, 570
-        elif (servo == 4): max_pulse, min_pulse = 1020, 606
+        if (servo == 0): max_pulse, min_pulse = 1012, 602
+        elif (servo == 1): max_pulse, min_pulse = 1012, 602
+        elif (servo == 2): max_pulse, min_pulse = 1012, 602
+        elif (servo == 3): max_pulse, min_pulse = 910, 705
+        elif (servo == 4): max_pulse, min_pulse = 910, 705
         elif (servo == 5): max_pulse, min_pulse = 930, 620
         else: return
         

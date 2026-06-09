@@ -30,7 +30,17 @@ The project uses the [Arduino-based Robot Arm Model](https://cults3d.com/en/3d-m
  
 This project provides a demo for teleoperating a 6-DOF robotic arm. It consists of two primary ROS2 nodes:
 1. **joy_teleop_hiddi (C++):** A high-performance node that interfaces directly with the QNX HIDDI service to read raw data from a connected gamepad. It parses this data and publishes it as standard `/joy` messages.
-2. **arm_controller (Python):** An easily configurable node that subscribes to the `/joy` messages. It translates joystick input into smooth, incremental movements for the arm's six servos, communicating with them via a `PCA9685 I²C servo driver`.
+2. **ik_solver (C++):** An inverse kinematics solver node using the Orocos
+KDL library's Levenberg-Marquardt (LMA) position solver. It receives
+Cartesian velocity commands from the arm controller, integrates them into
+a position target, and solves for joint angles. A position-priority weight
+matrix `[1,1,1,0,0,0]` is used to handle the under-determined 5-DOF
+system by prioritizing end-effector position over orientation.
+3. **arm_controller (Python):** An easily configurable node that acts as
+the hardware abstraction layer. It subscribes to both `/joy` messages for
+direct control and `/Mov` messages for IK-computed joint angles. It
+converts all commands to PWM signals and sends them to the servos via a
+PCA9685 I²C servo driver at 50Hz with exponential smoothing.
 
  
 ***
@@ -42,7 +52,11 @@ This project provides a demo for teleoperating a 6-DOF robotic arm. It consists 
 * **Homing Function:** A dedicated "Home" button on the gamepad smoothly returns the arm to its neutral, upright position.
 * **"Screensaver" Mode:** A toggleable mode that makes the arm perform a continuous, pre-programmed drawing motion (a figure-eight) until the user provides input.
 * **Individual Servo Tuning:** All movement speeds, safe limits, and automated poses are easily configurable in the Python script.
-***
+* **Direct Joystick Mode:** Each joystick axis directly controls the speed
+of a corresponding servo joint. Toggle with the B button on the gamepad.
+* **Inverse Kinematics Mode:** Joystick controls the end effector position
+in Cartesian space (X, Y, Z). The IK solver computes the required joint
+angles automatically. Toggle with the B button on the gamepad.
  
 ## Hardware Setup
  
@@ -149,13 +163,23 @@ The script will launch both the `joy_teleop_node` and the `arm_controller_node.p
 ## Configuration & Tuning
 
 ### Setting Safe Workspace Limits (`start_robot.sh`)
-To prevent the robot arm from colliding with obstacles or damaging its own servos, you can configure software limits directly in the `start_robot.sh` launch script. You do not need to recompile the code to change these boundaries.
+To prevent the robot arm from colliding with obstacles or damaging its own servos, you can configure software limits directly in the `start_robot.sh` launch script. You do not need to recompile the code to change these boundaries. There are two types of limits:
 
+#### Servo Percentage Limits
+These limits are enforced by the arm controller node and apply only in direct joystick mode. They are disabled when the IK solver is active, as Cartesian limits take over instead.
 Locate the `SERVO_MIN_LIMITS` and `SERVO_MAX_LIMITS` arrays in the script. The arrays map to the 6 servos in this exact order: `[Base, Shoulder, Elbow, Pitch, Roll, Gripper]`.
 
 * **Values:** Each value represents a percentage of physical rotation from **0.0** to **100.0**, where 50.0 is dead center. 
 * **How it works:** If you set a minimum limit of 25.0 and a maximum of 75.0, the Python node will mathematically clamp the servo so it cannot move outside of that 50% window, no matter how hard you push the joystick.
 * **Safe Centering:** When you press the "Home" button on the gamepad, the script will automatically calculate a safe center pose that falls within your defined limits so the arm never breaks its boundaries.
+
+#### Cartesian Workspace Limits
+This is used by the IK solver to clamp the target position before solving, ensuring the solver only receives reachable targets and preventing unexpected arm movements at workspace boundaries. Applies only in IK Mode.
+Locate the `CART_MIN_LIMITS` and `CART_MAX_LIMITS` arrays in the script. The arrays define the workspace box in this order: `[X, Y, Z]`.
+
+* **Values:** Each value is a distance in meters from the robot base frame origin.
+* **How it Works:**  The IK solver clamps the Cartesian target position to this 3D box before attempting to solve. If the joystick pushes the target outside the box, it is clamped to the nearest box boundary and the arm stops at the workspace edge.
+* **Determining Limits:** Use the FK (Forward Kinematics) output logged at startup to find the home position of the gripper. Set the limits as a box around this position based on your desired workspace.
 
 ### Controller Tuning (`arm_controller_node.py`)
 Additional high-level control logic and tunable parameters are located at the top of the **`arm_controller_node.py`** script. You can tweak the following to change how the arm feels:
