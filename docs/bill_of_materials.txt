@@ -1,0 +1,6 @@
+1 x Raspberry Pi 4 or Raspberry Pi 5
+1 x 3D printed body parts (see https://cults3d.com/en/3d-model/various/arduino-based-robot-arm-howtomechatronics)
+3 x MG996R Servo Motor
+3 x SG90 Micro Servo Motor
+1 x 5V 2A DC Power Supply
+Wiring as needed
