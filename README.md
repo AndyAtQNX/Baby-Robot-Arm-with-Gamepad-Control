@@ -2,7 +2,7 @@
  
 This repository provides a complete ROS2 project for controlling a 6-DOF robotic arm using a standard gamepad controller on the QNX SDP 8.0. The project is designed to run on a Raspberry Pi 4B or Pi 5 and demonstrates real-time, intuitive control over the arm's movements.
 
-![Picture of the Robotic Arm with ping pong balls.](https://github.com/qnx/Baby-Robot-Arm-with-Gamepad-Control/docs/QNX Robot Arm at CES.jpeg)
+![Picture of the Robotic Arm with ping pong balls.](https://github.com/qnx/Baby-Robot-Arm-with-Gamepad-Control/docs/QNX-Robot-Arm-at-CES.jpeg)
 
 The project uses the [Arduino-based Robot Arm Model](https://cults3d.com/en/3d-model/various/arduino-based-robot-arm-howtomechatronics) from [How To Mechatronics](https://howtomechatronics.com/) -- check out their website and other models!
 
